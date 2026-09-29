@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地字幕工具</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --card:#ffffff; --line:#e3e8ef; --line2:#d3dae6;
+    --text:#1a2233; --muted:#64748b; --brand:#2563eb; --brand-d:#1d4ed8;
+    --ok:#15a34a; --warn:#d97706; --err:#dc2626; --radius:12px;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 16px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  }
+  .wrap{max-width:940px;margin:0 auto;padding:26px 20px 60px}
+  header{display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+  h1{font-size:22px;margin:0;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:13px}
+  .envbar{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;background:var(--card);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px;
+    font-size:12.5px;color:var(--muted);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:#cbd5e1}
+  .dot.on{background:var(--ok)} .dot.off{background:var(--err)}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow);
+  }
+  .card h2{
+    font-size:14px;margin:0 0 14px;display:flex;align-items:center;gap:8px;
+    color:var(--text);font-weight:600;
+  }
+  .num{
+    width:20px;height:20px;border-radius:6px;background:var(--brand);color:#fff;
+    font-size:12px;display:inline-flex;align-items:center;justify-content:center;
+    font-weight:600;flex:none;
+  }
+  /* 拖拽区 */
+  .drop{
+    border:1.5px dashed var(--line2);border-radius:10px;padding:26px 16px;
+    text-align:center;color:var(--muted);cursor:pointer;transition:.15s;
+    background:#fbfcfe;
+  }
+  .drop:hover,.drop.over{border-color:var(--brand);background:#eff5ff;color:var(--brand)}
+  .drop b{color:var(--text);font-weight:600}
+  .picked{
+    display:none;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;
+    background:#eff5ff;border:1px solid #c7d9ff;border-radius:9px;font-size:13px;
+  }
+  .picked .nm{flex:1;word-break:break-all;font-weight:500}
+  .picked .sz{color:var(--muted);font-size:12px;flex:none}
+  .rowline{display:flex;gap:8px;margin-top:12px}
+  /* 表单 */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+  label.f{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px;font-weight:500}
+  select,input[type=text]{
+    width:100%;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;
+    font-size:13.5px;background:#fff;color:var(--text);font-family:inherit;
+  }
+  select:focus,input:focus{outline:2px solid #bfdbfe;border-color:var(--brand)}
+  .switches{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .sw{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;user-select:none}
+  .sw input{appearance:none;width:36px;height:20px;border-radius:999px;background:#cbd5e1;
+    position:relative;cursor:pointer;transition:.18s;flex:none;margin:0}
+  .sw input:checked{background:var(--brand)}
+  .sw input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;
+    border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .sw input:checked::after{transform:translateX(16px)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  /* 按钮 */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    padding:10px 20px;border-radius:9px;border:1px solid var(--line2);background:#fff;
+    color:var(--text);font-size:14px;font-weight:500;cursor:pointer;
+    font-family:inherit;transition:.15s;
+  }
+  .btn:hover{background:#f8fafc;border-color:#b9c4d4}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-d)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sm{padding:6px 13px;font-size:13px}
+  .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  /* 进度 */
+  .bar{height:9px;background:#e8edf5;border-radius:999px;overflow:hidden;margin:14px 0 8px}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3b82f6,#2563eb);
+    border-radius:999px;transition:width .3s ease}
+  .bar.indet>i{width:35%;animation:ind 1.1s infinite ease-in-out}
+  @keyframes ind{0%{margin-left:-35%}100%{margin-left:100%}}
+  .status{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
+  .status .msg{color:var(--text);font-weight:500}
+  pre.log{
+    margin:12px 0 0;background:#0f1729;color:#cbd5e1;border-radius:9px;padding:12px 14px;
+    font:12px/1.65 ui-monospace,Consolas,"Courier New",monospace;max-height:190px;
+    overflow:auto;white-space:pre-wrap;word-break:break-all;
+  }
+  pre.log:empty{display:none}
+  pre.out{
+    margin:12px 0 0;background:#fbfcfe;border:1px solid var(--line);border-radius:9px;
+    padding:14px 16px;font:13px/1.8 ui-monospace,Consolas,monospace;
+    max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+  }
+  .msg-err{color:var(--err)}
+  .status .msg.msg-err{color:var(--err)}
+  .resultbox{display:none}
+  footer{color:var(--muted);font-size:12px;text-align:center;margin-top:26px;line-height:1.9}
+  code{background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>本地字幕工具</h1>
+    <span class="sub">离线运行 · GPU 加速 · 不出本机</span>
+  </header>
+
+  <div class="envbar" id="envbar"></div>
+
+  <!-- 1 选视频 -->
+  <div class="card">
+    <h2><span class="num">1</span>选择视频</h2>
+    <div class="drop" id="drop">
+      把视频文件拖到这里，或 <b>点击选择</b><br>
+      <span style="font-size:12px">支持 mp4 / mkv / mov / avi / flv / wmv / m4a / mp3 / wav</span>
+    </div>
+    <input type="file" id="file" accept="video/*,audio/*" hidden>
+    <div class="picked" id="picked">
+      <span>🎬</span><span class="nm" id="pname"></span>
+      <span class="sz" id="psize"></span>
+      <button class="btn sm" id="pclear">移除</button>
+    </div>
+    <div class="rowline">
+      <input type="text" id="vpath" placeholder="或直接粘贴本机文件路径，例如 D:\video\我的视频.mp4">
+    </div>
+    <div class="hint">拖动/选择会把文件复制到工具的临时目录；粘贴路径则不复制，直接读取原文件（更快）。</div>
+  </div>
+
+  <!-- 2 设置 -->
+  <div class="card">
+    <h2><span class="num">2</span>设置</h2>
+    <div class="grid">
+      <div>
+        <label class="f">模型</label>
+        <select id="model"></select>
+      </div>
+      <div>
+        <label class="f">语言</label>
+        <select id="language">
+          <option value="zh">中文</option>
+          <option value="auto">自动检测</option>
+          <option value="en">英文</option>
+          <option value="ja">日文</option>
+          <option value="ko">韩文</option>
+          <option value="yue">粤语</option>
+        </select>
+      </div>
+      <div>
+        <label class="f">输出格式</label>
+        <select id="format">
+          <option value="srt">SRT 字幕</option>
+          <option value="vtt">VTT 字幕</option>
+          <option value="txt">纯文本</option>
+        </select>
+      </div>
+      <div>
+        <label class="f">CPU 线程（不开 GPU 时用）</label>
+        <select id="threads">
+          <option>4</option><option>8</option><option>12</option>
+          <option selected>16</option>
+        </select>
+      </div>
+    </div>
+    <div class="switches">
+      <label class="sw"><input type="checkbox" id="use_gpu" checked> GPU 加速</label>
+      <label class="sw"><input type="checkbox" id="vad" checked> VAD 过滤（防幻觉）</label>
+    </div>
+    <div style="margin-top:14px">
+      <label class="f">提示词（可选）—— 填人名、机构名、专业术语，能明显提升准确率</label>
+      <input type="text" id="prompt" placeholder="例如：张三、李四、腾讯云、Kubernetes">
+    </div>
+  </div>
+
+  <!-- 3 开始 -->
+  <div class="card">
+    <h2><span class="num">3</span>开始</h2>
+    <div class="actions">
+      <button class="btn primary" id="start" disabled>开始转写</button>
+      <button class="btn" id="cancel" style="display:none">取消</button>
+      <button class="btn" id="openout">打开输出目录</button>
+    </div>
+    <div class="bar" id="bar"><i></i></div>
+    <div class="status">
+      <span class="msg" id="msg">待命</span>
+      <span id="pct">0%</span>
+    </div>
+    <pre class="log" id="log"></pre>
+  </div>
+
+  <!-- 4 结果 -->
+  <div class="card resultbox" id="resultbox">
+    <h2><span class="num">4</span>结果</h2>
+    <div class="actions">
+      <button class="btn primary" id="dl">下载字幕</button>
+      <span class="sub" id="rname"></span>
+    </div>
+    <pre class="out" id="out"></pre>
+  </div>
+
+  <!-- 5 维护 -->
+  <div class="card">
+    <h2><span class="num">5</span>维护</h2>
+    <div class="actions">
+      <span class="sub" id="cacheinfo">缓存统计中…</span>
+      <button class="btn sm" id="clearcache">清理缓存</button>
+      <button class="btn sm" id="resetcfg">恢复默认设置</button>
+    </div>
+    <div class="hint">
+      清理缓存只删<code>临时目录</code>（上传副本、抽出的音频）和<code>输出目录</code>里已生成的字幕，
+      <b>程序、模型、设置都不受影响</b>。任务运行中不可用。
+    </div>
+  </div>
+
+  <footer>
+    运行在 <code>127.0.0.1</code>，所有处理均在本机完成，不联网、不上传。<br>
+    关闭启动窗口即可退出工具。
+  </footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = { videoPath: "", file: null, timer: null, lastStage: "", env: null,
+                hold: 0, holdMsg: "" };
+
+/* 临时提示：在 hold 到期前不被轮询覆盖（否则提示活不过 600ms） */
+function flash(msg, ms=4000){
+  state.hold = Date.now() + ms;
+  state.holdMsg = msg;
+  $('msg').textContent = msg;
+  $('msg').classList.remove('msg-err');
+}
+
+/* ---------- 初始化 ---------- */
+async function boot(){
+  const r = await fetch('/api/status').then(r=>r.json());
+  state.env = r.env || null;
+  renderEnv(r.env);
+  fillConfig(r.config, r.env);
+  bind();
+  loadCache();
+  poll();
+}
+
+function renderEnv(env){
+  const chips = [
+    ['识别引擎', env.cli_ok],
+    ['ffmpeg', env.ffmpeg_ok],
+    ['GPU 加速', env.gpu_ok],
+  ];
+  $('envbar').innerHTML = chips.map(([n,ok])=>
+    `<span class="chip"><span class="dot ${ok?'on':'off'}"></span>${n}${ok?'':' 不可用'}</span>`
+  ).join('') + (env.ffmpeg
+    ? `<span class="chip" title="${env.ffmpeg}">ffmpeg：${env.ffmpeg_name || env.ffmpeg}</span>` : '')
+    + (env.cuda && env.cuda.length
+      ? `<span class="chip" title="${env.cuda[0] || ''}">CUDA 运行库：已找到</span>` : '');
+}
+
+function fillConfig(cfg, env){
+  const sel = $('model');
+  const models = env.models && env.models.length ? env.models : ['models/ggml-large-v3.bin'];
+  sel.innerHTML = models.map(m=>{
+    const nm = m.split('/').pop();
+    const label = nm.includes('turbo') ? nm + '（快）'
+      : nm.includes('large-v3') ? nm + '（准）' : nm;
+    return `<option value="${m}">${label}</option>`;
+  }).join('');
+  sel.value = models.includes(cfg.model) ? cfg.model : models[0];
+  $('language').value = cfg.language || 'zh';
+  $('format').value   = cfg.format || 'srt';
+  $('threads').value  = String(cfg.threads || 16);
+  $('use_gpu').checked = cfg.use_gpu !== false;
+  $('vad').checked     = cfg.vad !== false;
+  $('prompt').value    = cfg.prompt || '';
+  if (!env.gpu_ok) $('use_gpu').checked = false;
+}
+
+/* ---------- 事件 ---------- */
+function bind(){
+  const drop = $('drop');
+  // 关键：每次打开选择框前清空 value。否则「移除后再选同一个文件」时
+  // input.value 没变化 → 浏览器不触发 change → pickFile 不被调用 → 界面毫无反应。
+  drop.onclick = ()=>{ $('file').value = ''; $('file').click(); };
+  $('file').onchange = e => e.target.files[0] && pickFile(e.target.files[0]);
+
+  ['dragenter','dragover'].forEach(ev=> drop.addEventListener(ev, e=>{
+    e.preventDefault(); drop.classList.add('over');
+  }));
+  ['dragleave','drop'].forEach(ev=> drop.addEventListener(ev, e=>{
+    e.preventDefault(); drop.classList.remove('over');
+  }));
+  drop.addEventListener('drop', e=>{
+    const f = e.dataTransfer.files[0];
+    if (f) pickFile(f);
+  });
+
+  $('pclear').onclick = ()=>{
+    state.file = null; state.videoPath = "";
+    $('file').value = '';
+    $('picked').style.display='none'; $('vpath').value='';
+    refreshStart();
+  };
+
+  $('vpath').oninput = e =>{
+    state.videoPath = e.target.value.trim();
+    state.file = null;
+    $('picked').style.display='none';
+    refreshStart();
+  };
+
+  $('start').onclick = startJob;
+  $('cancel').onclick = ()=> fetch('/api/cancel',{method:'POST'});
+  $('openout').onclick = ()=> fetch('/api/open_output',{method:'POST'});
+  $('dl').onclick = ()=>{
+    const n = $('rname').textContent;
+    if (n) location.href = '/api/download?f=' + encodeURIComponent(n);
+  };
+
+  $('clearcache').onclick = async ()=>{
+    if (!confirm('清理缓存？\n\n将删除：\n· 临时目录里的上传副本、抽出的音频\n· 输出目录里已生成的字幕\n\n程序、模型、设置都不受影响。')) return;
+    const r = await fetch('/api/clear_cache', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({targets:['tmp','output']})
+    }).then(r=>r.json());
+    if (!r.ok) return showErr(r.error || '清理失败');
+    // 若刚删掉的正是当前选中的文件副本 / 当前展示的结果，同步重置界面，避免留下死引用
+    if (state.videoPath && r.removed.includes(state.videoPath)){
+      state.videoPath = ''; state.file = null;
+      $('picked').style.display='none'; $('vpath').value='';
+      refreshStart();
+      flash('已清理缓存：原选中的文件副本已删除，请重新选择', 6000);
+      $('resultbox').style.display='none';
+    }else{
+      flash('已清理缓存，释放 ' + fmtSize(r.freed));
+    }
+    const cur = $('rname').textContent;
+    if (cur && r.removed.some(p => p.endsWith('\\' + cur) || p.endsWith('/' + cur))){
+      $('resultbox').style.display='none';
+      $('rname').textContent=''; $('out').textContent='';
+    }
+    loadCache();
+  };
+
+  $('resetcfg').onclick = async ()=>{
+    if (!confirm('恢复默认设置？\n\n语言=中文、格式=SRT、VAD 开、GPU 开、线程=16、提示词清空。\n已生成的字幕和模型都不受影响。')) return;
+    const r = await fetch('/api/reset_config', {method:'POST'}).then(r=>r.json());
+    if (!r.ok) return showErr(r.error || '重置失败');
+    fillConfig(r.config, state.env || {});
+    flash('设置已恢复默认');
+  };
+}
+
+function fmtSize(n){
+  if (n > 1073741824) return (n/1073741824).toFixed(2)+' GB';
+  if (n > 1048576) return (n/1048576).toFixed(1)+' MB';
+  return (n/1024).toFixed(0)+' KB';
+}
+
+/* ---------- 维护（缓存 / 重置） ---------- */
+async function loadCache(){
+  try{
+    const c = await fetch('/api/cache_info').then(r=>r.json());
+    $('cacheinfo').textContent =
+      `缓存 ${fmtSize(c.total)}（临时 ${c.tmp.count} 个 / 输出 ${c.output.count} 个）`;
+  }catch(e){
+    $('cacheinfo').textContent = '缓存统计失败';
+  }
+}
+
+function setMaintDisabled(on){
+  $('clearcache').disabled = on;
+  $('resetcfg').disabled = on;
+}
+
+async function pickFile(f){
+  state.file = f; state.videoPath = "";
+  $('picked').style.display = 'flex';
+  $('pname').textContent = f.name;
+  $('psize').textContent = fmtSize(f.size);
+  $('vpath').value = '';
+  refreshStart(f);
+}
+
+function refreshStart(f){
+  const ok = !!(state.videoPath || state.file);
+  $('start').disabled = !ok || !!(f && f.size === 0);
+  if (f) flash('文件已选好，点击「开始转写」');
+}
+
+/* ---------- 启动任务 ---------- */
+async function startJob(){
+  let vpath = state.videoPath;
+
+  if (!vpath && state.file){
+    // 上传期间常驻提示（hold 期间轮询不会覆盖；失败走 showErr 会自动清掉）
+    flash('正在把文件复制到临时目录…', 600000);
+    $('bar').classList.add('indet');
+    try{
+      const res = await fetch('/api/upload', {
+        method:'POST',
+        headers:{'X-Filename': encodeURIComponent(state.file.name)},
+        body: state.file
+      }).then(r=>r.json());
+      if (!res.ok) throw new Error(res.error || '上传失败');
+      vpath = res.path;
+    }catch(e){
+      $('bar').classList.remove('indet');
+      return showErr('文件复制失败：' + e.message);
+    }
+    $('bar').classList.remove('indet');
+  }
+
+  const payload = {
+    video: vpath,
+    model: $('model').value,
+    language: $('language').value,
+    format: $('format').value,
+    threads: parseInt($('threads').value,10),
+    use_gpu: $('use_gpu').checked,
+    vad: $('vad').checked,
+    prompt: $('prompt').value.trim()
+  };
+
+  const r = await fetch('/api/start', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r=>r.json());
+
+  if (!r.ok) return showErr(r.error || r.message || '启动失败');
+
+  $('resultbox').style.display='none';
+  $('log').textContent='';
+  state.lastStage='';
+  state.hold = 0;          // 交还给正常轮询，让任务进度提示接管
+  setRunning(true);
+}
+
+function setRunning(on){
+  $('start').disabled = on;
+  $('cancel').style.display = on ? 'inline-flex' : 'none';
+  setMaintDisabled(on);
+  if (!on) refreshStart();
+}
+
+function showErr(m){
+  state.hold = 0;
+  $('msg').textContent = m;
+  $('msg').classList.add('msg-err');
+}
+
+/* ---------- 轮询 ---------- */
+async function poll(){
+  clearTimeout(state.timer);
+  try{
+    const s = await fetch('/api/progress').then(r=>r.json());
+    render(s);
+  }catch(e){}
+  state.timer = setTimeout(poll, 600);
+}
+
+function render(s){
+  const bar = $('bar'), inner = bar.querySelector('i');
+  const running = s.running;
+
+  if (running && s.stage === 'extract'){
+    // 抽音轨阶段 ffmpeg 不报百分比，交给 CSS 里的往返动画。
+    // 必须清掉行内 width —— 行内样式优先级高于 .bar.indet>i{width:35%}，
+    // 否则动画会变成「整条满格左右滑动」。
+    bar.classList.add('indet');
+    inner.style.width = '';
+    $('pct').textContent = '抽音轨';
+  }else{
+    bar.classList.remove('indet');
+    // 取消/失败时把进度条归零，避免停在中间的百分比造成误导
+    const pct = s.stage === 'done' ? 100 : (s.stage === 'cancelled' ? 0 : s.progress);
+    inner.style.width = pct + '%';
+    $('pct').textContent = pct + '%';
+  }
+
+  if (state.hold && Date.now() < state.hold){
+    // 临时提示还在展示期内，不覆盖
+  }else{
+    state.hold = 0;
+    if (s.message){ $('msg').textContent = s.message; $('msg').classList.remove('msg-err'); }
+  }
+  if (s.stage === 'error' && s.error) showErr(s.error.split('\n')[0]);
+
+  if (s.log && s.log.length){
+    const el = $('log'), atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+    el.textContent = s.log.join('\n');
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+
+  setRunning(running);
+
+  if (s.stage === 'done' && state.lastStage !== 'done'){
+    state.lastStage = 'done';
+    loadResult();
+    loadCache();
+  }
+  if (s.stage !== 'done' && s.stage !== 'idle') state.lastStage = s.stage;
+}
+
+async function loadResult(){
+  const r = await fetch('/api/result').then(r=>r.json());
+  if (!r.ok) return;
+  $('rname').textContent = r.name;
+  $('out').textContent = r.text.length > 3000
+    ? r.text.slice(0,3000) + '\n\n… （仅预览前 3000 字符，完整内容请下载）'
+    : r.text;
+  $('resultbox').style.display = 'block';
+  $('resultbox').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+boot();
+</script>
+</body>
+</html>

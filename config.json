@@ -1,0 +1,11 @@
+{
+  "ffmpeg_path": "",
+  "cuda_dirs": [],
+  "model": "models/ggml-large-v3.bin",
+  "language": "zh",
+  "format": "srt",
+  "vad": true,
+  "use_gpu": true,
+  "prompt": "",
+  "threads": 8
+}
